@@ -1,101 +1,95 @@
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-from imblearn.over_sampling import RandomOverSampler
+from sklearn.metrics import accuracy_score, f1_score
 
-# Local imports
-from src.preprocessing import preprocess_dataframe
-from src.vectorization import get_tfidf_features
-from src.naive_bayes import MultinomialNaiveBayes
-from src.logistic_regression import LogisticRegression
-from src.visualization import plot_class_distribution, plot_toxicity_scores, plot_metrics_comparison
-from sklearn_models import train_sklearn_models
+# Imports des fichiers du projet
+from src.preprocessing import preparer_donnees, equilibrer_donnees
+from src.vectorization import SimpleBagOfWords
+from src.naive_bayes import MonNaiveBayes
+from src.logistic_regression import MaRegressionLogistique
+from src.visualization import afficher_histogramme, comparer_modeles, afficher_distribution_classes
+from sklearn_models import entrainer_modeles_pro
 
 def main():
-    # 1. Load Data
-    print("Loading dataset...")
-    df = pd.read_csv('data/comments.csv')
-    
-    # Use a subset for faster development/execution
-    # 20,000 rows is a good balance
-    df = df.sample(n=20000, random_state=42)
-    
-    # 2. Preprocessing
-    print("Preprocessing data...")
-    df = preprocess_dataframe(df)
-    
-    # 3. EDA - Class Distribution
-    print("Visualizing class distribution...")
-    plot_class_distribution(df)
-    
-    # 4. Split and Address Imbalance
-    X = df['cleaned_text']
-    y = df['is_toxic']
-    
-    X_train_raw, X_test_raw, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
-    # 5. Vectorization
-    print("Vectorizing text data...")
-    X_train_tfidf, X_test_tfidf, vectorizer = get_tfidf_features(X_train_raw, X_test_raw)
-    
-    # Handle Imbalance on training set
-    print("Handling class imbalance with oversampling...")
-    ros = RandomOverSampler(random_state=42)
-    X_train_res, y_train_res = ros.fit_resample(X_train_tfidf, y_train)
-    
-    all_metrics = {}
+    print("=== PROJET ML : DÉTECTION DE TOXICITÉ (Version Académique) ===\n")
 
-    # 6. Train Scikit-Learn Models (Baseline)
-    print("Training Scikit-Learn models...")
-    sklearn_results = train_sklearn_models(X_train_res, y_train_res, X_test_tfidf, y_test)
-    all_metrics.update(sklearn_results)
+    # 1. CHARGEMENT DES DONNÉES
+    print("1. Chargement des données...")
+    try:
+        df = pd.read_csv('data/archive/train.csv')
+    except FileNotFoundError:
+        print("Erreur : Le fichier 'data/archive/train.csv' est introuvable.")
+        return
 
-    # 7. Train Naive Bayes from Scratch
-    print("Training Naive Bayes from scratch...")
-    nb_scratch = MultinomialNaiveBayes()
-    nb_scratch.fit(X_train_res, y_train_res)
-    y_pred_nb = nb_scratch.predict(X_test_tfidf)
-    y_prob_nb = nb_scratch.predict_proba(X_test_tfidf)[:, 1]
+    # On prend un échantillon plus large pour avoir assez de toxiques après équilibrage
+    df = df.sample(n=10000, random_state=42) 
+
+    # 2. PRÉTRAITEMENT & MISSING VALUES
+    print("2. Prétraitement et gestion des valeurs manquantes...")
+    df = preparer_donnees(df)
+
+    # 3. ANALYSE EXPLORATOIRE (EDA)
+    print("3. Analyse exploratoire (EDA)...")
+    afficher_distribution_classes(df)
+
+    # 4. GESTION DU DÉSÉQUILIBRE DES CLASSES
+    print("4. Gestion du déséquilibre (Undersampling)...")
+    df = equilibrer_donnees(df)
+    # On vérifie la nouvelle distribution
+    print(f"Nouveau nombre de lignes après équilibrage : {len(df)}")
+
+    # 5. SÉPARATION (Entraînement / Test)
+    X_train_brut, X_test_brut, y_train, y_test = train_test_split(
+        df['texte_nettoye'], df['est_toxique'], test_size=0.2, random_state=42
+    )
+
+    # 6. VECTORISATION (Bag of Words)
+    print("\n6. Vectorisation des textes...")
+    bow = SimpleBagOfWords(max_mots=1000)
+    X_train = bow.fit_transform(X_train_brut)
+    X_test = bow.transform(X_test_brut)
+
+    # 7. ENTRAÎNEMENT DES MODÈLES (Fait Maison)
+    resultats_finaux = {}
+
+    # --- Naive Bayes ---
+    print("\n7. Entraînement de Naive Bayes (Maison)...")
+    model_nb = MonNaiveBayes()
+    model_nb.fit(X_train, y_train.values)
+    scores_nb = model_nb.predict_proba(X_test)
+    pred_nb = model_nb.predict(X_test)
     
-    all_metrics['NB_Scratch'] = {
-        'Accuracy': accuracy_score(y_test, y_pred_nb),
-        'Precision': precision_score(y_test, y_pred_nb),
-        'Recall': recall_score(y_test, y_pred_nb),
-        'F1': f1_score(y_test, y_pred_nb),
-        'probs': y_prob_nb
-    }
+    acc_nb = accuracy_score(y_test, pred_nb)
+    f1_nb = f1_score(y_test, pred_nb)
+    resultats_finaux['NB (Maison) Acc'] = acc_nb
+    resultats_finaux['NB (Maison) F1'] = f1_nb
+    print(f"  Accuracy : {acc_nb:.2%} | F1-Score : {f1_nb:.2%}")
 
-    # 8. Train Logistic Regression from Scratch
-    print("Training Logistic Regression from scratch (Gradient Descent)...")
-    # For speed, we use fewer iterations and a larger learning rate or a smaller sample if needed
-    lr_scratch = LogisticRegression(lr=0.1, n_iters=200) 
-    lr_scratch.fit(X_train_res, y_train_res)
-    y_pred_lr = lr_scratch.predict(X_test_tfidf)
-    y_prob_lr = lr_scratch.predict_proba(X_test_tfidf)
+    # --- Régression Logistique ---
+    print("\n8. Entraînement de la Régression Logistique (Maison)...")
+    model_lr = MaRegressionLogistique(taux_apprentissage=0.1, iterations=100)
+    model_lr.fit(X_train, y_train.values)
+    pred_lr = model_lr.predict(X_test)
     
-    all_metrics['LR_Scratch'] = {
-        'Accuracy': accuracy_score(y_test, y_pred_lr),
-        'Precision': precision_score(y_test, y_pred_lr),
-        'Recall': recall_score(y_test, y_pred_lr),
-        'F1': f1_score(y_test, y_pred_lr),
-        'probs': y_prob_lr
-    }
+    acc_lr = accuracy_score(y_test, pred_lr)
+    f1_lr = f1_score(y_test, pred_lr)
+    resultats_finaux['LR (Maison) Acc'] = acc_lr
+    resultats_finaux['LR (Maison) F1'] = f1_lr
+    print(f"  Accuracy : {acc_lr:.2%} | F1-Score : {f1_lr:.2%}")
 
-    # 9. Final Evaluation & Visualization
-    print("Generating final visualizations...")
-    metrics_to_plot = {k: {m: v for m, v in s.items() if m != 'probs'} for k, s in all_metrics.items()}
-    plot_metrics_comparison(metrics_to_plot)
-    
-    # Plot toxicity scores for the best performing scratch model (usually NB for text)
-    plot_toxicity_scores(all_metrics['NB_Scratch']['probs'], title='Toxicity Scores - Naive Bayes Scratch')
+    # 9. COMPARAISON AVEC SCIKIT-LEARN
+    print("\n9. Calcul de la comparaison avec Scikit-Learn...")
+    resultats_pro = entrainer_modeles_pro(X_train, y_train, X_test, y_test)
+    resultats_finaux.update(resultats_pro)
 
-    print("Pipeline completed sucessfully!")
-    print("\nResults comparison:")
-    for model, scores in metrics_to_plot.items():
-        print(f"\n{model}:")
-        for metric, val in scores.items():
-            print(f"  {metric}: {val:.4f}")
+    # 10. VISUALISATION
+    print("\n10. Génération des graphiques...")
+    afficher_histogramme(scores_nb, titre="Scores de Toxicite - Naive Bayes")
+    comparer_modeles(resultats_finaux)
+
+    print("\n=== TERMINÉ ===")
+    print("Points respectés : EDA, Missing Values, Balancing, Comparison, Metrics.")
 
 if __name__ == "__main__":
     main()

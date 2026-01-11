@@ -1,7 +1,7 @@
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
+**/*.pyc
+.ipynb_checkpoints/
 
 # Data
 data/comments.csv

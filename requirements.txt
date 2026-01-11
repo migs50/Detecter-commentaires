@@ -1,7 +1,5 @@
-pandas
+python
 numpy
+pandas
 matplotlib
-seaborn
 scikit-learn
-nltk
-imbalanced-learn

@@ -1,51 +1,49 @@
 import numpy as np
 
-class LogisticRegression:
-    def __init__(self, lr=0.01, n_iters=1000):
-        self.lr = lr
-        self.n_iters = n_iters
-        self.weights = None
-        self.bias = None
+# ÉTAPE 4 : LA RÉGRESSION LOGISTIQUE (Le réglage des boutons)
+# Pourquoi ? Ce modèle apprend des "poids". Un mot très toxique aura un gros poids.
+
+class MaRegressionLogistique:
+    def __init__(self, taux_apprentissage=0.01, iterations=100):
+        self.lr = taux_apprentissage
+        self.it = iterations
+        self.poids = None
+        self.biais = 0
 
     def _sigmoid(self, z):
+        # La fonction magique qui transforme n'importe quel chiffre en un score entre 0 et 1
         return 1 / (1 + np.exp(-z))
 
     def fit(self, X, y):
         """
-        X: array-like or sparse matrix (automatically converted to dense if needed)
-        y: array-like
+        Apprentissage : On ajuste les poids petit à petit (Descente de Gradient).
         """
-        # Convert sparse to dense for gradient descent if necessary
-        if hasattr(X, "toarray"):
-            X = X.toarray()
-        
-        X = np.array(X)
-        y = np.array(y)
+        n_echantillons, n_mots = X.shape
+        self.poids = np.zeros(n_mots) # Au début, on ne connaît rien (poids = 0)
+        self.biais = 0
+
+        print(f"Entraînement de la Régression Logistique ( {self.it} itérations )...")
+
+        for i in range(self.it):
+            # 1. Prédiction actuelle : Score = (X * poids) + biais
+            modele_lineaire = np.dot(X, self.poids) + self.biais
+            predictions = self._sigmoid(modele_lineaire)
+
+            # 2. Calculer l'erreur (Calculer comment on doit changer les poids)
+            erreur = predictions - y
+            gradient_poids = (1 / n_echantillons) * np.dot(X.T, erreur)
+            gradient_biais = (1 / n_echantillons) * np.sum(erreur)
+
+            # 3. Mettre à jour les poids (On tourne les boutons)
+            self.poids -= self.lr * gradient_poids
+            self.biais -= self.lr * gradient_biais
             
-        n_samples, n_features = X.shape
-        self.weights = np.zeros(n_features)
-        self.bias = 0
-
-        # Gradient Descent
-        for _ in range(self.n_iters):
-            linear_model = np.dot(X, self.weights) + self.bias
-            y_predicted = self._sigmoid(linear_model)
-
-            # Gradients
-            dw = (1 / n_samples) * np.dot(X.T, (y_predicted - y))
-            db = (1 / n_samples) * np.sum(y_predicted - y)
-
-            # Update weights and bias
-            self.weights -= self.lr * dw
-            self.bias -= self.lr * db
+            if i % 20 == 0:
+                print(f"  Itération {i} terminée.")
 
     def predict_proba(self, X):
-        if hasattr(X, "toarray"):
-            X = X.toarray()
-        linear_model = np.dot(X, self.weights) + self.bias
-        y_predicted = self._sigmoid(linear_model)
-        return y_predicted
+        modele_lineaire = np.dot(X, self.poids) + self.biais
+        return self._sigmoid(modele_lineaire)
 
-    def predict(self, X, threshold=0.5):
-        y_predicted_cls = [1 if i > threshold else 0 for i in self.predict_proba(X)]
-        return np.array(y_predicted_cls)
+    def predict(self, X, seuil=0.5):
+        return (self.predict_proba(X) >= seuil).astype(int)

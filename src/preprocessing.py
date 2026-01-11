@@ -1,68 +1,75 @@
 import pandas as pd
 import re
 
-# Hardcoded common English stopwords
-STOPWORDS = {
-    'i', 'me', 'my', 'myself', 'we', 'our', 'ours', 'ourselves', 'you', "you're", "you've", "you'll", "you'd",
-    'your', 'yours', 'yourself', 'yourselves', 'he', 'him', 'his', 'himself', 'she', "she's", 'her', 'hers',
-    'herself', 'it', "it's", 'its', 'itself', 'they', 'them', 'their', 'theirs', 'themselves', 'what', 'which',
-    'who', 'whom', 'this', 'that', "that'll", 'these', 'those', 'am', 'is', 'are', 'was', 'were', 'be', 'been',
-    'being', 'have', 'has', 'had', 'having', 'do', 'does', 'did', 'doing', 'a', 'an', 'the', 'and', 'but', 'if',
-    'or', 'because', 'as', 'until', 'while', 'of', 'at', 'by', 'for', 'with', 'about', 'against', 'between',
-    'into', 'through', 'during', 'before', 'after', 'above', 'below', 'to', 'from', 'up', 'down', 'in', 'out',
-    'on', 'off', 'over', 'under', 'again', 'further', 'then', 'once', 'here', 'there', 'when', 'where', 'why',
-    'how', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not',
-    'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't', 'can', 'will', 'just', 'don', "don't", 'should',
-    "should've", 'now', 'd', 'll', 'm', 'o', 're', 've', 'y', 'ain', 'aren', "aren't", 'couldn', "couldn't",
-    'didn', "didn't", 'doesn', "doesn't", 'hadn', "hadn't", 'hasn', "hasn't", 'haven', "haven't", 'isn', "isn't",
-    'ma', 'mightn', "mightn't", 'mustn', "mustn't", 'needn', "needn't", 'shan', "shan't", 'shouldn', "shouldn't",
-    'wasn', "wasn't", 'weren', "weren't", 'won', "won't", 'wouldn', "wouldn't"
-}
+# ÉTAPE 1 : LE PRÉTRAITEMENT (Nettoyage)
+# Pourquoi cette étape ? 
+# Les commentaires internet sont souvent "sales" (mélange de majuscules/minuscules, ponctuation, smileys).
+# Si on ne nettoie pas, l'ordinateur verra "Bonjour!" et "bonjour" comme deux mots différents.
+# On veut simplifier le texte pour ne garder que l'essentiel : les mots.
 
-def clean_text(text):
+def nettoyer_texte(texte):
     """
-    Perform basic text cleaning:
-    - Lowercase
-    - Remove punctuation
-    - Remove special characters/numbers
-    - Tokenization (Regex)
-    - Remove stopwords (Hardcoded)
+    Cette fonction prend un commentaire et le simplifie :
+    1. Tout en minuscules (pour que 'Bonjour' et 'bonjour' soient identiques)
+    2. Enlever tout ce qui n'est pas une lettre (chiffres, ponctuation)
+    3. Diviser le texte en une liste de mots
     """
-    if not isinstance(text, str):
+    if not isinstance(texte, str):
         return ""
     
-    # Lowercase
-    text = text.lower()
+    # 1. Minuscules
+    texte = texte.lower()
     
-    # Remove punctuation and special characters/numbers using regex
-    text = re.sub(r'[^a-z\s]', '', text)
+    # 2. On garde seulement les lettres de a à z (et les espaces)
+    # On utilise une "expression régulière" simple
+    texte = re.sub(r'[^a-z\s]', '', texte)
     
-    # Simple whitespace tokenization
-    tokens = text.split()
+    # 3. On découpe en mots (tokenization)
+    mots = texte.split()
     
-    # Remove stopwords
-    tokens = [t for t in tokens if t not in STOPWORDS]
-    
-    return " ".join(tokens)
+    # On rejoint les mots avec un espace pour avoir une phrase "propre"
+    return " ".join(mots)
 
-def preprocess_dataframe(df, text_column='comment_text'):
+def preparer_donnees(df, colonne_texte='comment_text'):
     """
-    Apply preprocessing to the entire dataframe:
-    - Handle missing values
-    - Clean text column
+    Applique le nettoyage sur tout le tableau (DataFrame).
     """
-    # Create a copy to avoid modifying the original
-    df = df.copy()
+    print("Nettoyage des commentaires en cours...")
     
-    # Handle missing values in text column
-    df[text_column] = df[text_column].fillna("")
+    # Copie du tableau pour ne pas abîmer l'original
+    df_propre = df.copy()
     
-    # Apply cleaning
-    print("Cleaning text data... this may take a moment.")
-    df['cleaned_text'] = df[text_column].apply(clean_text)
+    # Remplacer les valeurs vides par du texte vide
+    df_propre[colonne_texte] = df_propre[colonne_texte].fillna("")
     
-    # Binary classification: if any toxicity label is 1, then toxic = 1
-    toxicity_labels = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
-    df['is_toxic'] = df[toxicity_labels].max(axis=1)
+    # Nettoyer chaque ligne
+    df_propre['texte_nettoye'] = df_propre[colonne_texte].apply(nettoyer_texte)
     
-    return df
+    # Créer une colonne cible simple : 1 si toxique, 0 sinon
+    # Le dataset Kaggle a plusieurs colonnes (toxic, severe_toxic, etc.)
+    # On dit que si l'une d'elles est à 1, alors le commentaire est 'toxique'.
+    colonnes_toxicite = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+    df_propre['est_toxique'] = df_propre[colonnes_toxicite].max(axis=1)
+    
+    return df_propre
+
+def equilibrer_donnees(df, colonne='est_toxique'):
+    """
+    ÉTAPE : GESTION DU DÉSÉQUILIBRE DES CLASSES
+    Dans le monde réel, il y a beaucoup plus de commentaires "sains" que "toxiques".
+    Pour que le modèle apprenne bien à reconnaître les toxiques, on réduit 
+    le nombre de commentaires sains pour qu'il y en ait autant que de toxiques.
+    C'est ce qu'on appelle le "Undersampling".
+    """
+    print("Équilibrage des classes (Undersampling)...")
+    df_toxique = df[df[colonne] == 1]
+    df_sain = df[df[colonne] == 0]
+    
+    # On prend autant de sains que de toxiques
+    n_echantillons = min(len(df_toxique), len(df_sain))
+    df_sain_reduit = df_sain.sample(n=n_echantillons, random_state=42)
+    df_tox_reduit = df_toxique.sample(n=n_echantillons, random_state=42)
+    
+    # On mélange les deux
+    df_equilibre = pd.concat([df_tox_reduit, df_sain_reduit])
+    return df_equilibre.sample(frac=1, random_state=42) # Mélange final

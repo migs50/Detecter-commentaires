@@ -1,64 +1,63 @@
 import numpy as np
 
-class MultinomialNaiveBayes:
-    def __init__(self, alpha=1.0):
-        self.alpha = alpha  # Laplacian smoothing
-        self.class_prior = None
-        self.feature_log_prob = None
-        self.classes = None
+# ÉTAPE 3 : LE MODÈLE NAIVE BAYES (L'intuition des comptes)
+# Pourquoi ? C'est le modèle le plus simple pour le texte. 
+# Il regarde : "Si le mot 'insulte' apparaît, quelle est la probabilité que ce soit toxique ?"
+
+class MonNaiveBayes:
+    def __init__(self, lissage=1.0):
+        self.lissage = lissage # Sert à éviter les divisions par zéro
+        self.probs_mots_toxiques = None
+        self.probs_mots_sains = None
+        self.prob_toxique = 0
+        self.prob_sain = 0
 
     def fit(self, X, y):
         """
-        X: array-like or sparse matrix of shape (n_samples, n_features)
-        y: array-like of shape (n_samples,)
+        Apprentissage : On compte les mots dans chaque catégorie.
         """
-        n_samples, n_features = X.shape
-        y = np.array(y) # Ensure y is a numpy array
-        self.classes = np.unique(y)
-        n_classes = len(self.classes)
-
-        # Initialize priors and feature probabilities
-        self.class_prior = np.zeros(n_classes)
-        self.feature_log_prob = np.zeros((n_classes, n_features))
-
-        for i, c in enumerate(self.classes):
-            # Samples belonging to class c
-            X_c = X[y == c]
-            
-            # Prior P(c) = count(c) / count(total)
-            self.class_prior[i] = X_c.shape[0] / n_samples
-            
-            # Sum of features for class c + smoothing
-            feature_count = np.array(X_c.sum(axis=0)).flatten() + self.alpha
-            
-            # Total count of features in class c + smoothing * n_features
-            total_count = feature_count.sum()
-            
-            # Log likelihood: log(P(x|c))
-            self.feature_log_prob[i] = np.log(feature_count / total_count)
-
-        # Log prior: log(P(c))
-        self.class_log_prior = np.log(self.class_prior)
-
-    def _joint_log_likelihood(self, X):
-        """
-        Calculate log(P(c)) + log(P(x|c))
-        """
-        # X * log_prob.T results in (n_samples, n_classes)
-        return X @ self.feature_log_prob.T + self.class_log_prior
-
-    def predict(self, X):
-        """
-        Perform classification on an array of test vectors X.
-        """
-        jll = self._joint_log_likelihood(X)
-        return self.classes[np.argmax(jll, axis=1)]
+        n_echantillons, n_mots = X.shape
+        
+        # 1. Calculer la probabilité générale d'être toxique
+        self.prob_toxique = np.mean(y)
+        self.prob_sain = 1 - self.prob_toxique
+        
+        # 2. Séparer les données en deux groupes
+        X_toxique = X[y == 1]
+        X_sain = X[y == 0]
+        
+        # 3. Compter combien de fois chaque mot apparaît dans chaque groupe
+        # On ajoute le 'lissage' pour ne pas avoir de probabilité de 0%
+        comptes_toxiques = np.sum(X_toxique, axis=0) + self.lissage
+        comptes_sains = np.sum(X_sain, axis=0) + self.lissage
+        
+        # 4. Convertir en probabilités
+        self.probs_mots_toxiques = comptes_toxiques / np.sum(comptes_toxiques)
+        self.probs_mots_sains = comptes_sains / np.sum(comptes_sains)
 
     def predict_proba(self, X):
         """
-        Return probability estimates for the test vector X.
+        Calcul du score de toxicité pour chaque phrase.
         """
-        jll = self._joint_log_likelihood(X)
-        # Softmax of log likelihoods to get probabilities
-        exp_jll = np.exp(jll - np.max(jll, axis=1, keepdims=True))
-        return exp_jll / exp_jll.sum(axis=1, keepdims=True)
+        scores = []
+        for i in range(X.shape[0]):
+            # Pour chaque phrase, on multiplie les probabilités des mots présents
+            # On utilise le logarithme (np.log) car multiplier des petits chiffres 
+            # devient vite trop petit pour l'ordinateur.
+            log_prob_tox = np.log(self.prob_toxique) + np.sum(X[i] * np.log(self.probs_mots_toxiques))
+            log_prob_sain = np.log(self.prob_sain) + np.sum(X[i] * np.log(self.probs_mots_sains))
+            
+            # Plus le log_prob_tox est grand par rapport au log_prob_sain,
+            # plus le commentaire est probablement toxique.
+            
+            # Pour simplifier, on transforme en score entre 0 et 1
+            exp_tox = np.exp(log_prob_tox)
+            exp_sain = np.exp(log_prob_sain)
+            score = exp_tox / (exp_tox + exp_sain)
+            scores.append(score)
+            
+        return np.array(scores)
+
+    def predict(self, X, seuil=0.5):
+        scores = self.predict_proba(X)
+        return (scores >= seuil).astype(int)

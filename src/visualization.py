@@ -1,48 +1,62 @@
 import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
-import numpy as np
 
-def plot_class_distribution(df, label_column='is_toxic'):
-    """
-    Plot the distribution of classes (Toxic vs Non-Toxic).
-    """
-    plt.figure(figsize=(8, 6))
-    sns.countplot(x=label_column, data=df, palette='viridis')
-    plt.title('Distribution of Toxicity')
-    plt.xlabel('Is Toxic (0: No, 1: Yes)')
-    plt.ylabel('Count')
-    plt.savefig('class_distribution.png')
-    plt.close()
+# ÉTAPE 5 : LA VISUALISATION (Les Graphes)
+# Pourquoi ? Une image vaut mille mots. On veut voir la répartition des scores.
 
-def plot_toxicity_scores(y_probs, title='Histogram of Toxicity Scores'):
+def afficher_histogramme(scores, titre="Répartition des scores de toxicité"):
     """
-    Plot a histogram of the predicted toxicity probabilities.
+    Crée un histogramme simple.
+    Les scores sont entre 0 (Sain) et 1 (Toxique).
     """
     plt.figure(figsize=(10, 6))
-    sns.histplot(y_probs, bins=50, kde=True, color='red')
-    plt.title(title)
-    plt.xlabel('Toxicity Score')
-    plt.ylabel('Frequency')
-    plt.savefig('toxicity_scores_hist.png')
+    
+    # On crée l'histogramme avec 20 "bacs" (bins)
+    plt.hist(scores, bins=20, color='skyblue', edgecolor='black')
+    
+    plt.title(titre)
+    plt.xlabel("Score de toxicité (0 = Sain, 1 = Toxique)")
+    plt.ylabel("Nombre de commentaires")
+    
+    # On affiche une grille pour mieux lire
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    
+    # Sauvegarde de l'image
+    nom_fichier = titre.replace(" ", "_").lower() + ".png"
+    plt.savefig(nom_fichier)
+    print(f"Graphique sauvegardé : {nom_fichier}")
     plt.close()
 
-def plot_metrics_comparison(metrics_dict):
+def afficher_distribution_classes(df, colonne='est_toxique'):
     """
-    metrics_dict: { 'Model Name': {'Accuracy': 0.9, 'F1': 0.8, ...}, ... }
+    ÉTAPE : ANALYSE EXPLORATOIRE (EDA)
+    Affiche si le dataset est équilibré (autant de toxiques que de sains).
     """
-    df_metrics = []
-    for model, scores in metrics_dict.items():
-        for metric, val in scores.items():
-            df_metrics.append({'Model': model, 'Metric': metric, 'Score': val})
+    counts = df[colonne].value_counts()
+    labels = ['Sain (0)', 'Toxique (1)']
     
-    df_metrics = pd.DataFrame(df_metrics)
+    plt.figure(figsize=(8, 5))
+    plt.bar(labels, counts, color=['green', 'red'])
+    plt.title("Distribution des classes (Équilibre du dataset)")
+    plt.ylabel("Nombre de commentaires")
     
-    plt.figure(figsize=(12, 8))
-    sns.barplot(x='Metric', y='Score', hue='Model', data=df_metrics, palette='magma')
-    plt.title('Comparison of Model Metrics')
-    plt.ylim(0, 1)
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.tight_layout()
-    plt.savefig('metrics_comparison.png')
+    plt.savefig("distribution_classes.png")
+    plt.close()
+    print("Graphique EDA sauvegardé : distribution_classes.png")
+
+def comparer_modeles(resultats):
+    """
+    Affiche une comparaison simple des précisions.
+    resultats est un dictionnaire : {'Modèle': precision}
+    """
+    noms = list(resultats.keys())
+    valeurs = list(resultats.values())
+    
+    plt.figure(figsize=(10, 6))
+    plt.bar(noms, valeurs, color=['salmon', 'lightgreen', 'orange', 'cyan'])
+    
+    plt.title("Comparaison de la précision des modèles")
+    plt.ylabel("Précision (Accuracy)")
+    plt.ylim(0, 1) # L'échelle va de 0 à 100%
+    
+    plt.savefig("comparaison_modeles.png")
     plt.close()
